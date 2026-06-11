@@ -2,7 +2,7 @@
 
 Full-stack customer signal detection system that tells a sales team which accounts to call, why, and what to say.
 
-**Live:** [bird-dag.mikegrowsgreens.com](https://bird-dag.mikegrowsgreens.com)
+**Case Study:** [mikegrowsgreens.com/work/bird-dag](https://mikegrowsgreens.com/work/bird-dag)
 
 ## What It Does
 
