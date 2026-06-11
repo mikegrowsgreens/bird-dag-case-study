@@ -1,0 +1,618 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bird Dag | Mike Paulus</title>
+  <meta name="description" content="I built the system that tells our sales team which customers to call, why, and what to say. Here's how.">
+  <meta property="og:title" content="Bird Dag | Mike Paulus">
+  <meta property="og:description" content="Customer signal detection system I built at a B2B SaaS company. LLM scoring, baked data architecture, eight cents per run.">
+  <meta property="og:type" content="article">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          },
+          colors: {
+            surface: {
+              0: '#0a0a0f',
+              1: '#12121a',
+              2: '#1a1a26',
+              3: '#242433',
+            },
+            accent: {
+              DEFAULT: '#6366f1',
+              light: '#818cf8',
+              muted: '#4f46e5',
+            },
+            mint: '#34d399',
+            coral: '#fb7185',
+            amber: '#fbbf24',
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    body { background: #0a0a0f; }
+    .gradient-text {
+      background: linear-gradient(135deg, #818cf8, #34d399);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .card {
+      background: linear-gradient(145deg, rgba(26,26,38,0.8), rgba(18,18,26,0.9));
+      border: 1px solid rgba(99,102,241,0.1);
+      backdrop-filter: blur(12px);
+    }
+    .card:hover {
+      border-color: rgba(99,102,241,0.25);
+    }
+    .screenshot {
+      border: 1px solid rgba(99,102,241,0.15);
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+    }
+    .screenshot img {
+      width: 100%;
+      display: block;
+    }
+    .screenshot-label {
+      padding: 10px 16px;
+      background: rgba(18,18,26,0.95);
+      border-top: 1px solid rgba(99,102,241,0.1);
+      font-size: 0.75rem;
+      color: #71717a;
+    }
+    .glow-line {
+      height: 1px;
+      background: linear-gradient(90deg, transparent, #6366f1, #34d399, transparent);
+    }
+    .arch-flow {
+      background: repeating-linear-gradient(
+        0deg,
+        transparent,
+        transparent 23px,
+        rgba(99,102,241,0.06) 23px,
+        rgba(99,102,241,0.06) 24px
+      );
+    }
+    .tag {
+      background: rgba(99,102,241,0.12);
+      border: 1px solid rgba(99,102,241,0.2);
+      color: #a5b4fc;
+    }
+    @keyframes fade-up {
+      from { opacity: 0; transform: translateY(24px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .animate-in {
+      animation: fade-up 0.6s ease-out both;
+    }
+    section:nth-child(odd) .animate-in { animation-delay: 0.1s; }
+    section:nth-child(even) .animate-in { animation-delay: 0.15s; }
+    pre code {
+      font-size: 0.8rem;
+      line-height: 1.6;
+    }
+    .nav-link {
+      color: #71717a;
+      transition: color 0.2s;
+    }
+    .nav-link:hover { color: #a5b4fc; }
+    ::selection {
+      background: rgba(99,102,241,0.3);
+    }
+  </style>
+</head>
+<body class="font-sans text-zinc-300 antialiased">
+
+  <!-- Nav -->
+  <nav class="fixed top-0 w-full z-50 bg-surface-0/80 backdrop-blur-xl border-b border-white/5">
+    <div class="max-w-5xl mx-auto px-6 h-14 flex items-center justify-between">
+      <a href="#top" class="text-sm font-semibold text-zinc-100 tracking-tight">Mike Paulus</a>
+      <div class="flex gap-6 text-sm">
+        <a href="#problem" class="nav-link">Problem</a>
+        <a href="#what-it-does" class="nav-link">What It Does</a>
+        <a href="#architecture" class="nav-link">Architecture</a>
+        <a href="#hard-parts" class="nav-link">Hard Parts</a>
+        <a href="#impact" class="nav-link">Impact</a>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Hero -->
+  <header id="top" class="relative min-h-[85vh] flex items-center justify-center overflow-hidden">
+    <div class="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(99,102,241,0.08),transparent_70%)]"></div>
+    <div class="relative max-w-4xl mx-auto px-6 text-center animate-in">
+      <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-surface-2 border border-white/10 text-xs text-zinc-400 mb-8">
+        <span class="w-1.5 h-1.5 rounded-full bg-mint animate-pulse"></span>
+        In production at a B2B SaaS company
+      </div>
+      <h1 class="text-5xl md:text-7xl font-extrabold text-zinc-100 tracking-tight leading-[1.08] mb-6">
+        Bird Dag
+      </h1>
+      <p class="text-xl md:text-2xl text-zinc-400 max-w-2xl mx-auto leading-relaxed mb-10">
+        I built the system that tells our sales team which customers to call, why, and what to say. It scores
+        <span class="text-zinc-100 font-semibold">the full book of business</span> every week using
+        <span class="gradient-text font-semibold">LLM-powered signals</span> and costs about eight cents per run.
+      </p>
+      <div class="flex flex-wrap justify-center gap-2 mb-12">
+        <span class="tag px-3 py-1 rounded-full text-xs font-medium">Next.js 15</span>
+        <span class="tag px-3 py-1 rounded-full text-xs font-medium">TypeScript</span>
+        <span class="tag px-3 py-1 rounded-full text-xs font-medium">LLM API</span>
+        <span class="tag px-3 py-1 rounded-full text-xs font-medium">Data Warehouse</span>
+        <span class="tag px-3 py-1 rounded-full text-xs font-medium">PostgreSQL</span>
+        <span class="tag px-3 py-1 rounded-full text-xs font-medium">Kubernetes</span>
+        <span class="tag px-3 py-1 rounded-full text-xs font-medium">600+ Tests</span>
+      </div>
+      <a href="#problem" class="inline-flex items-center gap-2 text-sm text-accent-light hover:text-mint transition-colors">
+        How it works
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+      </a>
+    </div>
+  </header>
+
+  <div class="glow-line max-w-2xl mx-auto"></div>
+
+  <!-- Metrics Bar -->
+  <section class="py-16">
+    <div class="max-w-5xl mx-auto px-6">
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-6">
+        <div class="card rounded-xl p-6 text-center transition-all duration-300">
+          <div class="text-3xl font-bold text-zinc-100 mb-1">All</div>
+          <div class="text-sm text-zinc-500">Active accounts scored weekly</div>
+        </div>
+        <div class="card rounded-xl p-6 text-center transition-all duration-300">
+          <div class="text-3xl font-bold text-zinc-100 mb-1">18</div>
+          <div class="text-sm text-zinc-500">Signal definitions</div>
+        </div>
+        <div class="card rounded-xl p-6 text-center transition-all duration-300">
+          <div class="text-3xl font-bold text-zinc-100 mb-1">$0.08</div>
+          <div class="text-sm text-zinc-500">LLM cost per run</div>
+        </div>
+        <div class="card rounded-xl p-6 text-center transition-all duration-300">
+          <div class="text-3xl font-bold text-zinc-100 mb-1">600+</div>
+          <div class="text-sm text-zinc-500">Test cases</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Problem -->
+  <section id="problem" class="py-20">
+    <div class="max-w-3xl mx-auto px-6 animate-in">
+      <div class="text-xs font-semibold uppercase tracking-widest text-accent-light mb-4">The Problem</div>
+      <h2 class="text-3xl md:text-4xl font-bold text-zinc-100 mb-8 leading-tight">
+        Nobody knew which customers to worry about
+      </h2>
+      <div class="space-y-5 text-zinc-400 leading-relaxed text-lg">
+        <p>
+          The company had a growing book of business and no way to tell which accounts were expanding, which were about to churn, and which ones had a real upsell play. AEs were running ad-hoc queries and checking dashboards manually. Some weren't checking at all.
+        </p>
+        <p>
+          The data existed. Product usage, consumption metrics, support tickets, meeting cadence, webinar attendance, community activity. All of it sat across 20+ tables in the data warehouse. The problem wasn't missing data. It was that nobody had time to pull it all together, score it, and figure out what to do about it every week.
+        </p>
+        <p>
+          There was a legacy internal tool that tried to do this. It was broken. I replaced it.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <div class="glow-line max-w-xl mx-auto"></div>
+
+  <!-- What It Does -->
+  <section id="what-it-does" class="py-20">
+    <div class="max-w-3xl mx-auto px-6 animate-in">
+      <div class="text-xs font-semibold uppercase tracking-widest text-accent-light mb-4">What It Does</div>
+      <h2 class="text-3xl md:text-4xl font-bold text-zinc-100 mb-8 leading-tight">
+        Six things, one system
+      </h2>
+      <p class="text-zinc-400 leading-relaxed text-lg mb-12">
+        Bird Dag runs a weekly bake that pulls from the data warehouse, scores everything, and pushes the results to a dashboard and Slack. Here's what comes out the other end.
+      </p>
+
+      <div class="space-y-6">
+        <div class="card rounded-xl p-6 transition-all duration-300">
+          <div class="flex items-start gap-4">
+            <div class="flex-shrink-0 w-10 h-10 rounded-lg bg-accent/10 flex items-center justify-center">
+              <svg class="w-5 h-5 text-accent-light" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+            </div>
+            <div>
+              <h3 class="text-lg font-semibold text-zinc-100 mb-2">Signal detection</h3>
+              <p class="text-zinc-400 text-sm leading-relaxed">18 signal types evaluated against every account. Usage growth WoW, consumption rate changes, support spikes, deployment changes, contract thresholds. Each one gets a severity (P0/P1/P2) and a label: expansion, churn, or mixed.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="card rounded-xl p-6 transition-all duration-300">
+          <div class="flex items-start gap-4">
+            <div class="flex-shrink-0 w-10 h-10 rounded-lg bg-mint/10 flex items-center justify-center">
+              <svg class="w-5 h-5 text-mint" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
+            </div>
+            <div>
+              <h3 class="text-lg font-semibold text-zinc-100 mb-2">LLM expansion scoring</h3>
+              <p class="text-zinc-400 text-sm leading-relaxed">An LLM looks at each account's signals and classifies it into an expansion motion with a predicted ARR delta and confidence score. The whole thing costs about $0.08 for the entire book of business because I built a token budget system that caps spending per run.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="card rounded-xl p-6 transition-all duration-300">
+          <div class="flex items-start gap-4">
+            <div class="flex-shrink-0 w-10 h-10 rounded-lg bg-coral/10 flex items-center justify-center">
+              <svg class="w-5 h-5 text-coral" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/></svg>
+            </div>
+            <div>
+              <h3 class="text-lg font-semibold text-zinc-100 mb-2">Health scores</h3>
+              <p class="text-zinc-400 text-sm leading-relaxed">Multiple factors across product usage, technical health, strategic alignment, engagement, and expansion path. Some are rules-based. Others are LLM-evaluated. And then there are hard overrides, because a statistical model doesn't know that "this company is being acquired" means throw out every other signal.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="card rounded-xl p-6 transition-all duration-300">
+          <div class="flex items-start gap-4">
+            <div class="flex-shrink-0 w-10 h-10 rounded-lg bg-amber/10 flex items-center justify-center">
+              <svg class="w-5 h-5 text-amber" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+            </div>
+            <div>
+              <h3 class="text-lg font-semibold text-zinc-100 mb-2">Persona analysis</h3>
+              <p class="text-zinc-400 text-sm leading-relaxed">Multiple views into the buying committee: who's the champion, who's the decision maker, where are the coverage gaps, which contacts have gone stale. All baked in one pass from CRM and community platform data.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="card rounded-xl p-6 transition-all duration-300">
+          <div class="flex items-start gap-4">
+            <div class="flex-shrink-0 w-10 h-10 rounded-lg bg-accent/10 flex items-center justify-center">
+              <svg class="w-5 h-5 text-accent-light" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>
+            </div>
+            <div>
+              <h3 class="text-lg font-semibold text-zinc-100 mb-2">Slack delivery</h3>
+              <p class="text-zinc-400 text-sm leading-relaxed">Monday morning, every AE gets a DM with their accounts that fired P0 or P1 signals. Each message has the signal context, the recommended play, and the predicted ARR delta. P2 signals go to a shared channel. No login required. If you don't open the dashboard all week, you still know what's happening.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="card rounded-xl p-6 transition-all duration-300">
+          <div class="flex items-start gap-4">
+            <div class="flex-shrink-0 w-10 h-10 rounded-lg bg-mint/10 flex items-center justify-center">
+              <svg class="w-5 h-5 text-mint" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+            </div>
+            <div>
+              <h3 class="text-lg font-semibold text-zinc-100 mb-2">One-click QBRs</h3>
+              <p class="text-zinc-400 text-sm leading-relaxed">Hit a button, get a Quarterly Business Review with health scores, contact roster, usage metrics, and top signals. Generates a shareable link the AE can send to the customer directly. No login on the customer's end. PDF export via server-side rendering if they need a file.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Screenshots -->
+  <section class="py-16 bg-surface-1/50">
+    <div class="max-w-5xl mx-auto px-6">
+      <div class="text-xs font-semibold uppercase tracking-widest text-accent-light mb-4 text-center">What it looks like</div>
+      <p class="text-xs text-zinc-600 text-center mb-8">Screenshots use anonymized sample data. All company names, people, and figures are fictional.</p>
+
+      <div class="screenshot mb-8">
+        <img src="screenshots/dashboard.png" alt="Bird Dag executive dashboard showing pipeline metrics, open renewals, and CQ upsells" loading="lazy">
+        <div class="screenshot-label">Executive dashboard. Pipeline, renewals, upsells by ARR. Filterable by AE and CSM.</div>
+      </div>
+
+      <div class="grid md:grid-cols-2 gap-6 mb-8">
+        <div class="screenshot">
+          <img src="screenshots/signals.png" alt="Signals page showing top signals, top accounts, and signal sources" loading="lazy">
+          <div class="screenshot-label">Signals view. 18 signal types across every account, filterable by type, source, and time window.</div>
+        </div>
+        <div class="screenshot">
+          <img src="screenshots/account-detail.png" alt="Account detail page showing health score, churn risk banner, and score history" loading="lazy">
+          <div class="screenshot-label">Account detail. Health score, churn risk banner, score trend over 90 days, factor breakdown.</div>
+        </div>
+      </div>
+
+      <div class="screenshot">
+        <img src="screenshots/personas.png" alt="Personas page showing buyer DNA analysis with title distribution by lifecycle" loading="lazy">
+        <div class="screenshot-label">Persona analysis. Buyer DNA tab showing won-deal profile and title distribution by lifecycle stage.</div>
+      </div>
+    </div>
+  </section>
+
+  <div class="glow-line max-w-xl mx-auto"></div>
+
+  <!-- Architecture -->
+  <section id="architecture" class="py-20">
+    <div class="max-w-4xl mx-auto px-6 animate-in">
+      <div class="text-xs font-semibold uppercase tracking-widest text-accent-light mb-4">Architecture</div>
+      <h2 class="text-3xl md:text-4xl font-bold text-zinc-100 mb-6 leading-tight">
+        Everything expensive happens at build time
+      </h2>
+      <div class="space-y-4 text-zinc-400 leading-relaxed text-lg mb-10">
+        <p>
+          This was the decision that shaped the whole system. All the warehouse queries, LLM calls, and health score math run once a week in a CronJob. The output is a JSON blob that gets pushed to object storage.
+        </p>
+        <p>
+          At runtime, the app just reads from object storage. No database queries for the main views. No API calls. Pages load fast. Costs are fixed. If the storage layer goes down, the app serves stale data from disk instead of crashing.
+        </p>
+        <p>
+          The tradeoff is obvious: data is at most a week old. For this use case, that's fine. AEs don't need real-time. They need a Monday morning brief.
+        </p>
+      </div>
+
+      <!-- Architecture Diagram -->
+      <div class="card rounded-xl p-8 arch-flow font-mono text-sm mb-10">
+        <div class="space-y-6">
+          <div>
+            <div class="text-accent-light font-semibold mb-3 font-sans text-xs uppercase tracking-widest">Weekly Bake (CronJob)</div>
+            <div class="grid md:grid-cols-2 gap-3">
+              <div class="bg-surface-0/60 rounded-lg p-3 border border-white/5">
+                <div class="text-zinc-500 text-xs mb-1">Data Sources</div>
+                <div class="text-zinc-300">Data warehouse <span class="text-zinc-600">&rarr;</span> 250+ SQL fixtures</div>
+                <div class="text-zinc-500 text-xs mt-1">accounts, opps, usage, support, meetings, webinars, community</div>
+              </div>
+              <div class="bg-surface-0/60 rounded-lg p-3 border border-white/5">
+                <div class="text-zinc-500 text-xs mb-1">Processing</div>
+                <div class="text-zinc-300">Signal eval <span class="text-zinc-600">&rarr;</span> LLM scoring <span class="text-zinc-600">&rarr;</span> Health compute</div>
+                <div class="text-zinc-500 text-xs mt-1">persona aggregation, feature adoption, opportunity ranking</div>
+              </div>
+            </div>
+            <div class="flex justify-center my-3">
+              <svg class="w-5 h-5 text-zinc-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"/></svg>
+            </div>
+            <div class="bg-surface-0/60 rounded-lg p-3 border border-accent/20 text-center">
+              <span class="text-accent-light">data.json</span> <span class="text-zinc-600">&rarr;</span> <span class="text-mint">Object Storage</span>
+            </div>
+          </div>
+
+          <div>
+            <div class="text-mint font-semibold mb-3 font-sans text-xs uppercase tracking-widest">Runtime (Next.js Standalone)</div>
+            <div class="grid md:grid-cols-3 gap-3">
+              <div class="bg-surface-0/60 rounded-lg p-3 border border-white/5">
+                <div class="text-zinc-500 text-xs mb-1">Read Path</div>
+                <div class="text-zinc-300">Object storage <span class="text-zinc-500">(ETag, periodic refresh)</span></div>
+              </div>
+              <div class="bg-surface-0/60 rounded-lg p-3 border border-white/5">
+                <div class="text-zinc-500 text-xs mb-1">Write Path</div>
+                <div class="text-zinc-300">Postgres <span class="text-zinc-500">(QBRs, user state)</span></div>
+              </div>
+              <div class="bg-surface-0/60 rounded-lg p-3 border border-white/5">
+                <div class="text-zinc-500 text-xs mb-1">Delivery</div>
+                <div class="text-zinc-300">Slack Bot <span class="text-zinc-500">(P0/P1 DMs)</span></div>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <div class="text-coral font-semibold mb-3 font-sans text-xs uppercase tracking-widest">What People See</div>
+            <div class="flex flex-wrap gap-2">
+              <span class="bg-surface-0/60 rounded-lg px-3 py-1.5 border border-white/5 text-zinc-400 text-xs">Executive Dashboard</span>
+              <span class="bg-surface-0/60 rounded-lg px-3 py-1.5 border border-white/5 text-zinc-400 text-xs">Account Detail Pages</span>
+              <span class="bg-surface-0/60 rounded-lg px-3 py-1.5 border border-white/5 text-zinc-400 text-xs">Persona Analysis</span>
+              <span class="bg-surface-0/60 rounded-lg px-3 py-1.5 border border-white/5 text-zinc-400 text-xs">QBR Generator</span>
+              <span class="bg-surface-0/60 rounded-lg px-3 py-1.5 border border-white/5 text-zinc-400 text-xs">MQL Tracker</span>
+              <span class="bg-surface-0/60 rounded-lg px-3 py-1.5 border border-white/5 text-zinc-400 text-xs">Slack Delivery</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Tech Stack -->
+  <section class="py-16 bg-surface-1/50">
+    <div class="max-w-5xl mx-auto px-6">
+      <div class="text-xs font-semibold uppercase tracking-widest text-accent-light mb-8 text-center">Stack</div>
+      <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div class="card rounded-xl p-5 transition-all duration-300">
+          <div class="text-sm font-semibold text-zinc-100 mb-2">Frontend</div>
+          <p class="text-xs text-zinc-500 leading-relaxed">Next.js, React, TypeScript (strict), Tailwind, Recharts</p>
+        </div>
+        <div class="card rounded-xl p-5 transition-all duration-300">
+          <div class="text-sm font-semibold text-zinc-100 mb-2">Backend</div>
+          <p class="text-xs text-zinc-500 leading-relaxed">Next.js API routes, ORM, PostgreSQL, object storage with ISR cache</p>
+        </div>
+        <div class="card rounded-xl p-5 transition-all duration-300">
+          <div class="text-sm font-semibold text-zinc-100 mb-2">Data pipeline</div>
+          <p class="text-xs text-zinc-500 leading-relaxed">Custom TypeScript ETL, data warehouse SDK, 250+ SQL fixtures</p>
+        </div>
+        <div class="card rounded-xl p-5 transition-all duration-300">
+          <div class="text-sm font-semibold text-zinc-100 mb-2">AI</div>
+          <p class="text-xs text-zinc-500 leading-relaxed">LLM API with cloud provider fallback, token budgets, prompt caching</p>
+        </div>
+        <div class="card rounded-xl p-5 transition-all duration-300">
+          <div class="text-sm font-semibold text-zinc-100 mb-2">Infra</div>
+          <p class="text-xs text-zinc-500 leading-relaxed">Docker multi-stage, managed Kubernetes, GitOps, zero-trust networking</p>
+        </div>
+        <div class="card rounded-xl p-5 transition-all duration-300">
+          <div class="text-sm font-semibold text-zinc-100 mb-2">Testing</div>
+          <p class="text-xs text-zinc-500 leading-relaxed">Vitest, 600+ tests, in-memory DB for integration tests</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="glow-line max-w-xl mx-auto"></div>
+
+  <!-- Hard Parts -->
+  <section id="hard-parts" class="py-20">
+    <div class="max-w-3xl mx-auto px-6 animate-in">
+      <div class="text-xs font-semibold uppercase tracking-widest text-accent-light mb-4">Hard Parts</div>
+      <h2 class="text-3xl md:text-4xl font-bold text-zinc-100 mb-10 leading-tight">
+        What was actually difficult
+      </h2>
+
+      <div class="space-y-12">
+
+        <div>
+          <h3 class="text-xl font-semibold text-zinc-100 mb-3">Keeping LLM costs from exploding</h3>
+          <p class="text-zinc-400 leading-relaxed mb-4">
+            The naive version of this would send every account's full context to an LLM and let it score. That would cost hundreds of dollars per run. Not viable for a weekly job.
+          </p>
+          <p class="text-zinc-400 leading-relaxed mb-4">
+            I built a token budget system. Each run gets a hard cap. The shared context (pricing tiers, product catalog) is identical across all accounts, so it goes in a cached prompt block. The per-account cost is just the variable data. If the budget runs out mid-run, it stops cleanly and reports which accounts got scored and which didn't.
+          </p>
+          <p class="text-zinc-400 leading-relaxed">
+            There's also a fallback path. Primary is the LLM provider's API directly. If that's down, it switches to a cloud provider's managed inference endpoint. Same model, different auth path. I've never actually needed the fallback in production, but it's there.
+          </p>
+        </div>
+
+        <div>
+          <h3 class="text-xl font-semibold text-zinc-100 mb-3">Signals that fire too much are useless</h3>
+          <p class="text-zinc-400 leading-relaxed mb-4">
+            Early versions had a problem: if an account's usage was growing 60% WoW for three weeks straight, the AE got three identical alerts. That's noise, not signal. They started ignoring everything.
+          </p>
+          <p class="text-zinc-400 leading-relaxed mb-4">
+            I added firing granularity controls. Some signals fire daily, some weekly. Usage growth fires once per week, period. If the trend continues, it doesn't re-alert. Definitions are versioned with supersede chains, so when I change a threshold from 50% to 25%, historical data doesn't break and the same event doesn't trigger twice under different versions.
+          </p>
+          <p class="text-zinc-400 leading-relaxed">
+            There's also a minimum signal threshold. An account has to fire at least 2 signals before it becomes an opportunity. Single-signal flares created too many false positives.
+          </p>
+        </div>
+
+        <div>
+          <h3 class="text-xl font-semibold text-zinc-100 mb-3">Health scores that ignore context are wrong</h3>
+          <p class="text-zinc-400 leading-relaxed mb-4">
+            The health score model has multiple factors. Some are rules-based (product usage, technical health). Others are LLM-evaluated (strategic alignment, engagement sentiment, expansion path). On paper, it works.
+          </p>
+          <p class="text-zinc-400 leading-relaxed">
+            In practice, the model kept rating accounts as "green" when anyone on the sales team could tell you they were about to churn. A customer near their usage ceiling with 30 days to renewal isn't healthy. A company in the middle of an acquisition isn't stable. So I added hard overrides. Domain-specific rules that force a Red rating regardless of what the computed factors say. Circuit breakers. This is the part of the system I'm most proud of, because it's where the engineering meets actual sales knowledge.
+          </p>
+        </div>
+
+        <div>
+          <h3 class="text-xl font-semibold text-zinc-100 mb-3">Pre-rendering hundreds of pages without the build falling over</h3>
+          <p class="text-zinc-400 leading-relaxed mb-4">
+            Every account gets its own detail page, pre-rendered at build time. That's a lot of pages with charts, timelines, signal histories, and persona breakdowns. The default Node heap size can't handle it. I had to significantly increase it for the SSG pass.
+          </p>
+          <p class="text-zinc-400 leading-relaxed">
+            The Docker build is a multi-stage setup. First stage builds with the fat heap. Second stage runs a minimal image with a headless browser for PDF export. I had to explicitly exclude build artifacts from the runtime bundle or the image ballooned.
+          </p>
+        </div>
+
+        <div>
+          <h3 class="text-xl font-semibold text-zinc-100 mb-3">Making signals useful, not just accurate</h3>
+          <p class="text-zinc-400 leading-relaxed">
+            A signal that says "usage grew 60% WoW" is accurate but not useful. An AE can't walk into a call with that. So every signal carries a "why" payload: which specific behaviors changed, what new activity appeared, how consumption shifted. The AE opens their Monday DM and has a concrete talking point, not a dashboard link they have to interpret. This was a product decision more than an engineering one, but it shaped how the whole bake pipeline works because the payloads have to be assembled from the same warehouse queries at build time.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="glow-line max-w-xl mx-auto"></div>
+
+  <!-- Impact -->
+  <section id="impact" class="py-20">
+    <div class="max-w-3xl mx-auto px-6 animate-in">
+      <div class="text-xs font-semibold uppercase tracking-widest text-accent-light mb-4">Impact</div>
+      <h2 class="text-3xl md:text-4xl font-bold text-zinc-100 mb-10 leading-tight">
+        What actually changed
+      </h2>
+
+      <div class="space-y-5 text-zinc-400 text-lg leading-relaxed">
+        <p>
+          Before Bird Dag, the process was: AE opens the data warehouse, writes a query (or asks someone to), stares at numbers, decides whether to act. Most weeks, they didn't bother.
+        </p>
+        <p>
+          Now every AE gets a Slack DM on Monday with their accounts that need attention, ranked by severity, with specific talking points. The dashboard exists for people who want to dig deeper, but the Slack delivery is the real product.
+        </p>
+      </div>
+
+      <div class="space-y-4 mt-10">
+        <div class="flex items-start gap-4">
+          <div class="flex-shrink-0 w-2 h-2 rounded-full bg-mint mt-2.5"></div>
+          <p class="text-zinc-300 text-lg leading-relaxed">
+            Serves the full AE/CSM org. Not a prototype. Production system behind zero-trust networking.
+          </p>
+        </div>
+        <div class="flex items-start gap-4">
+          <div class="flex-shrink-0 w-2 h-2 rounded-full bg-mint mt-2.5"></div>
+          <p class="text-zinc-300 text-lg leading-relaxed">
+            QBR generation went from a multi-hour manual exercise to one click. Shareable link, no customer login needed.
+          </p>
+        </div>
+        <div class="flex items-start gap-4">
+          <div class="flex-shrink-0 w-2 h-2 rounded-full bg-mint mt-2.5"></div>
+          <p class="text-zinc-300 text-lg leading-relaxed">
+            LLM costs stayed at $0.08/run. That's scoring every active account, classifying expansion motions, and computing health factors. Per week.
+          </p>
+        </div>
+        <div class="flex items-start gap-4">
+          <div class="flex-shrink-0 w-2 h-2 rounded-full bg-mint mt-2.5"></div>
+          <p class="text-zinc-300 text-lg leading-relaxed">
+            600+ tests. Not because I love testing, but because the signal logic has edge cases that will absolutely bite you if you don't cover them.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Skills -->
+  <section class="py-16 bg-surface-1/50">
+    <div class="max-w-5xl mx-auto px-6">
+      <div class="text-xs font-semibold uppercase tracking-widest text-accent-light mb-8 text-center">What I touched</div>
+      <div class="grid md:grid-cols-2 gap-4">
+        <div class="card rounded-xl p-5 transition-all duration-300">
+          <div class="text-sm font-semibold text-zinc-100 mb-1">Full-stack app</div>
+          <p class="text-xs text-zinc-500">Next.js frontend, API routes, Postgres, object storage caching, PDF generation</p>
+        </div>
+        <div class="card rounded-xl p-5 transition-all duration-300">
+          <div class="text-sm font-semibold text-zinc-100 mb-1">Data pipeline</div>
+          <p class="text-xs text-zinc-500">250+ SQL fixtures from 20+ warehouse tables, weekly ETL orchestration</p>
+        </div>
+        <div class="card rounded-xl p-5 transition-all duration-300">
+          <div class="text-sm font-semibold text-zinc-100 mb-1">Production LLM</div>
+          <p class="text-xs text-zinc-500">Cost-controlled inference, prompt caching, dual backends, token budgets</p>
+        </div>
+        <div class="card rounded-xl p-5 transition-all duration-300">
+          <div class="text-sm font-semibold text-zinc-100 mb-1">System design</div>
+          <p class="text-xs text-zinc-500">Bake-time/runtime split, cache invalidation, signal versioning, cost predictability</p>
+        </div>
+        <div class="card rounded-xl p-5 transition-all duration-300">
+          <div class="text-sm font-semibold text-zinc-100 mb-1">Infrastructure</div>
+          <p class="text-xs text-zinc-500">Managed Kubernetes, Docker multi-stage, GitOps, zero-trust ingress</p>
+        </div>
+        <div class="card rounded-xl p-5 transition-all duration-300">
+          <div class="text-sm font-semibold text-zinc-100 mb-1">Domain modeling</div>
+          <p class="text-xs text-zinc-500">Health scores, expansion motions, persona taxonomies, signal versioning with supersede chains</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="glow-line max-w-xl mx-auto"></div>
+
+  <!-- Footer -->
+  <footer class="py-20">
+    <div class="max-w-3xl mx-auto px-6 text-center">
+      <h2 class="text-2xl md:text-3xl font-bold text-zinc-100 mb-4">Want to talk about it?</h2>
+      <p class="text-zinc-500 mb-8 max-w-lg mx-auto">
+        I'm looking for my next role. If you're building something where this kind of work is relevant, reach out.
+      </p>
+      <div class="flex justify-center gap-4">
+        <a href="https://linkedin.com/in/mikepaulus" target="_blank" rel="noopener" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-accent hover:bg-accent-muted text-white text-sm font-medium transition-colors">
+          LinkedIn
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+        </a>
+        <a href="mailto:mike@mikepaulus.com" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-surface-2 hover:bg-surface-3 text-zinc-300 text-sm font-medium border border-white/10 transition-colors">
+          Email
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
+        </a>
+      </div>
+      <div class="mt-16 text-xs text-zinc-700">
+        Mike Paulus, Fort Collins CO
+      </div>
+    </div>
+  </footer>
+
+</body>
+</html>
