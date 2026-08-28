@@ -143,8 +143,8 @@
       </h1>
       <p class="text-xl md:text-2xl text-zinc-400 max-w-2xl mx-auto leading-relaxed mb-10">
         I built the system that tells our sales team which customers to call, why, and what to say. It scores
-        <span class="text-zinc-100 font-semibold">the full book of business</span> every week using
-        <span class="gradient-text font-semibold">LLM-powered signals</span> and costs about eight cents per run.
+        <span class="text-zinc-100 font-semibold">the full book of business</span> on multi-cadence schedules using
+        <span class="gradient-text font-semibold">LLM-powered signals</span> and costs about eight cents per scoring run.
       </p>
       <div class="flex flex-wrap justify-center gap-2 mb-12">
         <span class="tag px-3 py-1 rounded-full text-xs font-medium">Next.js 15</span>
@@ -153,7 +153,7 @@
         <span class="tag px-3 py-1 rounded-full text-xs font-medium">Data Warehouse</span>
         <span class="tag px-3 py-1 rounded-full text-xs font-medium">PostgreSQL</span>
         <span class="tag px-3 py-1 rounded-full text-xs font-medium">Kubernetes</span>
-        <span class="tag px-3 py-1 rounded-full text-xs font-medium">600+ Tests</span>
+        <span class="tag px-3 py-1 rounded-full text-xs font-medium">580+ Tests</span>
       </div>
       <a href="#problem" class="inline-flex items-center gap-2 text-sm text-accent-light hover:text-mint transition-colors">
         How it works
@@ -173,15 +173,15 @@
           <div class="text-sm text-zinc-500">Active accounts scored weekly</div>
         </div>
         <div class="card rounded-xl p-6 text-center transition-all duration-300">
-          <div class="text-3xl font-bold text-zinc-100 mb-1">18</div>
+          <div class="text-3xl font-bold text-zinc-100 mb-1">30+</div>
           <div class="text-sm text-zinc-500">Signal definitions</div>
         </div>
         <div class="card rounded-xl p-6 text-center transition-all duration-300">
           <div class="text-3xl font-bold text-zinc-100 mb-1">$0.08</div>
-          <div class="text-sm text-zinc-500">LLM cost per run</div>
+          <div class="text-sm text-zinc-500">LLM cost per scoring run</div>
         </div>
         <div class="card rounded-xl p-6 text-center transition-all duration-300">
-          <div class="text-3xl font-bold text-zinc-100 mb-1">600+</div>
+          <div class="text-3xl font-bold text-zinc-100 mb-1">580+</div>
           <div class="text-sm text-zinc-500">Test cases</div>
         </div>
       </div>
@@ -219,7 +219,7 @@
         Six things, one system
       </h2>
       <p class="text-zinc-400 leading-relaxed text-lg mb-12">
-        Bird Dag runs a weekly bake that pulls from the data warehouse, scores everything, and pushes the results to a dashboard and Slack. Here's what comes out the other end.
+        Bird Dag runs a multi-cadence bake pipeline — hourly data refresh, periodic LLM scoring — that pulls from the data warehouse, scores everything, and pushes the results to a dashboard and Slack. Here's what comes out the other end.
       </p>
 
       <div class="space-y-6">
@@ -230,7 +230,7 @@
             </div>
             <div>
               <h3 class="text-lg font-semibold text-zinc-100 mb-2">Signal detection</h3>
-              <p class="text-zinc-400 text-sm leading-relaxed">18 signal types evaluated against every account. Usage growth WoW, consumption rate changes, support spikes, deployment changes, contract thresholds. Each one gets a severity (P0/P1/P2) and a label: expansion, churn, or mixed.</p>
+              <p class="text-zinc-400 text-sm leading-relaxed">30+ signal types evaluated against every account. Usage growth WoW, consumption rate changes, support spikes, deployment changes, contract thresholds, meeting cadence, webinar engagement, community activity. Each one gets a severity (P0/P1/P2) and a label: expansion, churn, or mixed.</p>
             </div>
           </div>
         </div>
@@ -312,7 +312,7 @@
       <div class="grid md:grid-cols-2 gap-6 mb-8">
         <div class="screenshot">
           <img src="screenshots/signals.png" alt="Signals page showing top signals, top accounts, and signal sources" loading="lazy">
-          <div class="screenshot-label">Signals view. 18 signal types across every account, filterable by type, source, and time window.</div>
+          <div class="screenshot-label">Signals view. 30+ signal types across every account, filterable by type, source, and time window.</div>
         </div>
         <div class="screenshot">
           <img src="screenshots/account-detail.png" alt="Account detail page showing health score, churn risk banner, and score history" loading="lazy">
@@ -338,13 +338,13 @@
       </h2>
       <div class="space-y-4 text-zinc-400 leading-relaxed text-lg mb-10">
         <p>
-          This was the decision that shaped the whole system. All the warehouse queries, LLM calls, and health score math run once a week in a CronJob. The output is a JSON blob that gets pushed to object storage.
+          This was the decision that shaped the whole system. Warehouse queries run hourly in a fast bake CronJob. LLM scoring, persona analysis, and other expensive jobs run on daily or weekly cadences. The output is a JSON blob that gets pushed to object storage.
         </p>
         <p>
           At runtime, the app just reads from object storage. No database queries for the main views. No API calls. Pages load fast. Costs are fixed. If the storage layer goes down, the app serves stale data from disk instead of crashing.
         </p>
         <p>
-          The tradeoff is obvious: data is at most a week old. For this use case, that's fine. AEs don't need real-time. They need a Monday morning brief.
+          Core data refreshes every hour. LLM scoring and persona jobs run less frequently because the signals they evaluate don't change that fast. AEs get fresh data throughout the day, plus a Monday morning Slack brief.
         </p>
       </div>
 
@@ -352,11 +352,11 @@
       <div class="card rounded-xl p-8 arch-flow font-mono text-sm mb-10">
         <div class="space-y-6">
           <div>
-            <div class="text-accent-light font-semibold mb-3 font-sans text-xs uppercase tracking-widest">Weekly Bake (CronJob)</div>
+            <div class="text-accent-light font-semibold mb-3 font-sans text-xs uppercase tracking-widest">Multi-Cadence Bake (CronJobs)</div>
             <div class="grid md:grid-cols-2 gap-3">
               <div class="bg-surface-0/60 rounded-lg p-3 border border-white/5">
                 <div class="text-zinc-500 text-xs mb-1">Data Sources</div>
-                <div class="text-zinc-300">Data warehouse <span class="text-zinc-600">&rarr;</span> 250+ SQL fixtures</div>
+                <div class="text-zinc-300">Data warehouse <span class="text-zinc-600">&rarr;</span> 50+ queries across 30 modules</div>
                 <div class="text-zinc-500 text-xs mt-1">accounts, opps, usage, support, meetings, webinars, community</div>
               </div>
               <div class="bg-surface-0/60 rounded-lg p-3 border border-white/5">
@@ -422,7 +422,7 @@
         </div>
         <div class="card rounded-xl p-5 transition-all duration-300">
           <div class="text-sm font-semibold text-zinc-100 mb-2">Data pipeline</div>
-          <p class="text-xs text-zinc-500 leading-relaxed">Custom TypeScript ETL, data warehouse SDK, 250+ SQL fixtures</p>
+          <p class="text-xs text-zinc-500 leading-relaxed">Custom TypeScript ETL, data warehouse SDK, 50+ warehouse queries across 30 data modules</p>
         </div>
         <div class="card rounded-xl p-5 transition-all duration-300">
           <div class="text-sm font-semibold text-zinc-100 mb-2">AI</div>
@@ -434,7 +434,7 @@
         </div>
         <div class="card rounded-xl p-5 transition-all duration-300">
           <div class="text-sm font-semibold text-zinc-100 mb-2">Testing</div>
-          <p class="text-xs text-zinc-500 leading-relaxed">Vitest, 600+ tests, in-memory DB for integration tests</p>
+          <p class="text-xs text-zinc-500 leading-relaxed">Vitest, 580+ tests, in-memory DB for integration tests</p>
         </div>
       </div>
     </div>
@@ -455,7 +455,7 @@
         <div>
           <h3 class="text-xl font-semibold text-zinc-100 mb-3">Keeping LLM costs from exploding</h3>
           <p class="text-zinc-400 leading-relaxed mb-4">
-            The naive version of this would send every account's full context to an LLM and let it score. That would cost hundreds of dollars per run. Not viable for a weekly job.
+            The naive version of this would send every account's full context to an LLM and let it score. That would cost hundreds of dollars per run. Not viable for a recurring job.
           </p>
           <p class="text-zinc-400 leading-relaxed mb-4">
             I built a token budget system. Each run gets a hard cap. The shared context (pricing tiers, product catalog) is identical across all accounts, so it goes in a cached prompt block. The per-account cost is just the variable data. If the budget runs out mid-run, it stops cleanly and reports which accounts got scored and which didn't.
@@ -543,13 +543,13 @@
         <div class="flex items-start gap-4">
           <div class="flex-shrink-0 w-2 h-2 rounded-full bg-mint mt-2.5"></div>
           <p class="text-zinc-300 text-lg leading-relaxed">
-            LLM costs stayed at $0.08/run. That's scoring every active account, classifying expansion motions, and computing health factors. Per week.
+            LLM costs stayed at $0.08 per scoring run. That's scoring every active account, classifying expansion motions, and computing health factors.
           </p>
         </div>
         <div class="flex items-start gap-4">
           <div class="flex-shrink-0 w-2 h-2 rounded-full bg-mint mt-2.5"></div>
           <p class="text-zinc-300 text-lg leading-relaxed">
-            600+ tests. Not because I love testing, but because the signal logic has edge cases that will absolutely bite you if you don't cover them.
+            580+ tests. Not because I love testing, but because the signal logic has edge cases that will absolutely bite you if you don't cover them.
           </p>
         </div>
       </div>
@@ -567,7 +567,7 @@
         </div>
         <div class="card rounded-xl p-5 transition-all duration-300">
           <div class="text-sm font-semibold text-zinc-100 mb-1">Data pipeline</div>
-          <p class="text-xs text-zinc-500">250+ SQL fixtures from 20+ warehouse tables, weekly ETL orchestration</p>
+          <p class="text-xs text-zinc-500">50+ warehouse queries across 30 data modules, 20+ warehouse tables, multi-cadence ETL</p>
         </div>
         <div class="card rounded-xl p-5 transition-all duration-300">
           <div class="text-sm font-semibold text-zinc-100 mb-1">Production LLM</div>

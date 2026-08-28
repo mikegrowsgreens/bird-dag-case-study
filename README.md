@@ -6,8 +6,8 @@ Full-stack customer signal detection system that tells a sales team which accoun
 
 ## What It Does
 
-- 18 signal types evaluated weekly across every active account
-- LLM expansion scoring with token budgets ($0.08/run for full book of business)
+- 30+ signal types evaluated across every active account on multi-cadence schedules (hourly data refresh, periodic LLM scoring)
+- LLM expansion scoring with token budgets ($0.08 per scoring run for full book of business)
 - Composite health scores with hard-override circuit breakers
 - Persona/buying committee analysis from CRM + community data
 - Monday Slack DMs to each AE with priority accounts and talking points
@@ -15,7 +15,7 @@ Full-stack customer signal detection system that tells a sales team which accoun
 
 ## Architecture
 
-All expensive computation (warehouse queries, LLM calls, health scoring) runs at build time in a weekly bake. Output goes to object storage. The Next.js app reads cached results at runtime. Pages load fast, cost is fixed and predictable.
+All expensive computation (warehouse queries, LLM calls, health scoring) runs at build time across multiple bake cadences — hourly for core data, daily/weekly for LLM scoring and persona analysis. Output goes to object storage. The Next.js app reads cached results at runtime. Pages load fast, cost is fixed and predictable.
 
 ## Stack
 
@@ -23,10 +23,10 @@ All expensive computation (warehouse queries, LLM calls, health scoring) runs at
 |---|---|
 | Frontend | Next.js, React, TypeScript (strict), Tailwind, Recharts |
 | Backend | Next.js API routes, ORM, PostgreSQL, object storage with ISR |
-| Pipeline | Custom TypeScript ETL, data warehouse SDK, 250+ SQL fixtures |
+| Pipeline | Custom TypeScript ETL, data warehouse SDK, 50+ warehouse queries across 30 data modules |
 | AI | LLM API with cloud provider fallback, token budgets, prompt caching |
 | Infra | Docker multi-stage, managed Kubernetes, GitOps, zero-trust networking |
-| Testing | Vitest, 600+ tests, in-memory DB for integration tests |
+| Testing | Vitest, 580+ tests, in-memory DB for integration tests |
 
 ## Screenshots
 
